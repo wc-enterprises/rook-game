@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Socket.io Example</title>
+<link rel="stylesheet" href="style.css">
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js" defer></script>
+</head>
+<body>
+    <div id="name-entry">
+        <input type="text" id="player-name" placeholder="Enter your name" required>
+        <button onclick="setName()">Set Name</button>
+    </div>
+    <div id="players">
+        <div class="player-info" id="top-info"></div>
+        <div id="top-player" class="player"></div>
+        <button id="switch-button" onclick="switchPlayers()" >Switch Turn</button>
+        <div id="bottom-player" class="player"></div>
+        <div class="player-info" id="bottom-info"></div>
+    </div>
+</body>
+</html>

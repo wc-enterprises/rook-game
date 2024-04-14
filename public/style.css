@@ -1,0 +1,43 @@
+#players {
+    position: relative;
+    width: 200px;
+    height: 250px; /* Increased height to make room for the button */
+    margin: 100px auto;
+    border: 3px solid black;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around; /* Changed from space-between to space-around */
+}
+
+.top-disabled, .bottom-disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    pointer-events: none; /* Prevents click events on the button */
+}
+
+
+
+#switch-button {
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+
+.player {
+    width: 30px;
+    height: 30px;
+    background-color: gray;
+    border-radius: 50%;
+    margin: auto;
+    transition: border 0.3s ease;
+}
+
+.active {
+    border: 3px solid yellow;
+}
+
+#name-entry {
+    text-align: center;
+    margin-bottom: 20px;
+}
