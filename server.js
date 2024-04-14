@@ -1,88 +1,141 @@
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
+const express = require("express");
+const http = require("http");
+const socketIo = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-app.use(express.static('public'));
+app.use(express.static("public"));
 
-const TIMER = 5000;
+// // When a new player connects
+// io.on("connection", (socket) => {
+//   // Assign a player name
+//   let playerName = assignPlayerName(socket);
 
-let players = {};  // Stores socket IDs for top and bottom players
-let names = { top: 'Top Player', bottom: 'Bottom Player' };
-let turnTimer;     // Stores the timer for automatic turn switching
-let activePlayer = null;  // To indicate the currently active player
+//   // Send a message to the client indicating their assigned name
+//   socket.emit("connected", { message: `You are connected as ${playerName}` });
 
+//   // Listen for rook position updates from the client (Abin or Bhanu)
+//   socket.on("rookPosition", (data) => {
+//     // Broadcast the rook's position to all connected clients (including Bhanu)
+//     io.emit("rookPosition", data);
+//   });
+// });
 
-io.on('connection', (socket) => {
-    console.log('A user connected: ' + socket.id);
+// // Function to assign a player name
+// function assignPlayerName(socket) {
+//   let playerName;
 
-    // Assign player roles
-    if (!players.top) {
-        players.top = socket.id;
-        activePlayer = socket.id;  // Make the first player active by default
-    } else if (!players.bottom) {
-        players.bottom = socket.id;
-        // Start turn timer when both players are present
-        turnTimer = setInterval(switchTurns, TIMER);
+//   // Count the number of players currently connected
+//   let numPlayers = Object.keys(playerNames).length;
 
-        // When both top and bottom players are set emit "activePlayer" event
-        io.emit('activePlayer', { players, activePlayer});
-    } else {
-        // socket.emit('role', 'spectator');
-    }
+//   // Check if the maximum number of players has been reached
+//   if (numPlayers >= MAX_PLAYERS) {
+//     // If the room is full, emit a "Room is full" message to the client and return a placeholder name
+//     socket.emit("roomFull", { message: "Room is full" });
+//     return "Room is full";
+//   }
 
-    
-   
+//   // Assign player name based on availability
+//   if (!playerNames["Abin"]) {
+//     playerName = "Abin";
+//   } else if (!playerNames["Bhanu"]) {
+//     playerName = "Bhanu";
+//   } else {
+//     // If both names are taken, assign a generic name
+//     playerName = `Player${numPlayers + 1}`;
+//   }
 
-    socket.on('set-name', (name) => {
-        if (socket.id === players.top) {
-            names.top = name;
-        } else if (socket.id === players.bottom) {
-            names.bottom = name;
-        }
-        io.emit('update-names', names);
-    });
+//   // Store the assigned player name in the playerNames object
+//   playerNames[playerName] = socket.id;
 
-    socket.on('disconnect', () => {
-        console.log('A user disconnected: ' + socket.id);
-        if (players.top === socket.id) {
-            clearInterval(turnTimer);  // Stop the timer if one player disconnects
-            delete players.top;
-            names.top = 'Top Player';
-        } else if (players.bottom === socket.id) {
-            clearInterval(turnTimer);  // Stop the timer if one player disconnects
-            delete players.bottom;
-            names.bottom = 'Bottom Player';
-        }
+//   return playerName;
+// }
 
-           // Reset active player if the disconnected one was active
-           if (activePlayer === socket.id) {
-            activePlayer = players.top ? players.top : players.bottom;
-        }
+// Initialize an empty object to store player names and their socket IDs
+let playerNames = {};
+const MAX_PLAYERS = 2;
 
-        io.emit('update-names', names);
-    });
+// When a new player connects
+io.on("connection", (socket) => {
+  // Assign a player name or remove previous player names if any tab is reloaded
+  let playerName = assignPlayerName(socket);
 
-    socket.on('switch', () => {
-        clearInterval(turnTimer);  // Reset timer on manual switch
-        switchTurns();
-        turnTimer = setInterval(switchTurns, TIMER);  // Restart the timer
-    });
+  // Send a message to the client indicating their assigned name
+  socket.emit("connected", { message: `You are connected as ${playerName}` });
+
+  // Listen for rook position updates from the client (Abin or Bhanu)
+  socket.on("rookPosition", (data) => {
+    // Broadcast the rook's position to all connected clients (including Bhanu)
+    io.emit("rookPosition", data);
+  });
+
+  // When a player disconnects
+  socket.on("disconnect", () => {
+    // Remove the disconnected player's name from the playerNames object
+    removePlayerName(socket.id);
+  });
 });
 
-function switchTurns() {
-    if (players.top && players.bottom) {  // Ensure both players are connected
-        activePlayer = (activePlayer === players.top) ? players.bottom : players.top;
-        io.emit('activePlayer', { players, activePlayer});
-    }
+// Function to assign a player name
+function assignPlayerName(socket) {
+  let playerName;
+
+  // If the socket is already assigned a name, remove it
+  removePlayerName(socket.id);
+
+  // Count the number of players currently connected
+  let numPlayers = Object.keys(playerNames).length;
+
+  // Check if the maximum number of players has been reached
+  if (numPlayers >= MAX_PLAYERS) {
+    // If the room is full, remove all player names
+    resetPlayerNames();
+  }
+
+  // Assign player name based on availability
+  if (!playerNames["Abin"]) {
+    playerName = "Abin";
+  } else if (!playerNames["Bhanu"]) {
+    playerName = "Bhanu";
+  } else {
+    // If both names are taken, assign a generic name
+    playerName = `Player${numPlayers + 1}`;
+  }
+
+  // Store the assigned player name in the playerNames object
+  playerNames[playerName] = socket.id;
+
+  return playerName;
 }
+
+// Function to remove a player name based on socket ID
+function removePlayerName(socketId) {
+  Object.keys(playerNames).forEach((name) => {
+    if (playerNames[name] === socketId) {
+      delete playerNames[name];
+    }
+  });
+}
+
+// Function to remove all player names
+function resetPlayerNames() {
+  playerNames = {};
+}
+
+// When a player disconnects
+io.on("disconnect", (socket) => {
+  // Find the disconnected player's name and remove it from the playerNames object
+  let disconnectedPlayerName = Object.keys(playerNames).find(
+    (name) => playerNames[name] === socket.id
+  );
+  if (disconnectedPlayerName) {
+    delete playerNames[disconnectedPlayerName];
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
-
-

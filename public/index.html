@@ -1,21 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Multiplayer Game</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="script.js" defer></script>
+    <link rel="stylesheet" href="style.css" />
+    <!-- <script src="script.js" defer></script> -->
     <style>
-        canvas {
-            border: 1px solid black;
-        }
+      canvas {
+        border: 1px solid black;
+      }
     </style>
-</head>
+  </head>
 
-<body>
-    <div id="name-entry">
+  <body>
+    <!-- <div id="name-entry">
         <input type="text" id="player-name" placeholder="Enter your name" required>
         <button onclick="setName()">Set Name</button>
     </div>
@@ -25,12 +24,10 @@
         <button id="switch-button" onclick="switchPlayers()" >Switch Turn</button>
         <div id="bottom-player" class="player"></div>
         <div class="player-info" id="bottom-info"></div>
-    </div>
+    </div> -->
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js"></script>
     <script src="game.js"></script>
-  
-</body>
-
+  </body>
 </html>
