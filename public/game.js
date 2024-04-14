@@ -19,13 +19,20 @@ const config = {
 
 const game = new Phaser.Game(config);
 let square;
+const ACTIVE_TIME_FOR_A_PLAYER = 5000;
+let TURN_DURATION = 5000; // 60 seconds
 
 let rook;
 let player1Circle;
 let player2Circle;
 let activePlayer = 1; // Initially set to player 1
 let timerEvent; // Timer event reference
+let timerText;
 let board;
+let playerName;
+let currentActivePlayerName;
+let remainingTime;
+let rookStartPosition = null; // This will hold the {x, y} of the rook at the start of the turn
 
 function preload() {
   this.load.image("grid", "../assets/grid.png");
@@ -34,6 +41,8 @@ function preload() {
 
   this.load.image("player1", "./assets/player1.png");
   this.load.image("player2", "./assets/player2.png");
+  this.load.image("destination", "./assets/destination.png");
+  this.load.image("winner-board", "./assets/winner-board.png");
 }
 
 function create() {
@@ -42,7 +51,7 @@ function create() {
 
   // Add a green border around the board
   const graphics = this.add.graphics();
-  graphics.lineStyle(4, 0x00ff00); // Green color, line thickness 4
+  graphics.lineStyle(2, 0xffd700); // Green color, line thickness 4
   graphics.strokeRect(
     board.x - board.displayWidth / 2,
     board.y - board.displayHeight / 2,
@@ -50,10 +59,15 @@ function create() {
     board.displayHeight
   );
 
-  const scaleFactor = 41 / 150;
+  const scaleFactor = 30 / 150;
   rook = this.add
     .sprite(334, 187, "rook")
     .setScale(scaleFactor)
+    .setInteractive();
+
+  destination = this.add
+    .sprite(43, 480, "destination")
+    .setScale(50 / 150)
     .setInteractive();
 
   // Add player 1 circle
@@ -68,19 +82,12 @@ function create() {
   );
   player2Circle.setScale(0.5); // Adjust scale if needed
 
-  // Start the timer
-  timerEvent = this.time.addEvent({
-    delay: 60000, // 5 seconds
-    loop: true,
-    callback: switchActivePlayer,
-    callbackScope: this,
-  });
-  // Connect to Socket.io server
   socket = io();
 
   // Handle successful connection
   socket.on("connected", (data) => {
     console.log(data.message);
+    playerName = data.playerName; // Capture the assigned player name
   });
 
   // Add event listeners for keyboard input
@@ -92,28 +99,52 @@ function create() {
     rook.x = data.x;
     rook.y = data.y;
   });
+
+  socket.on("gameEnd", (data) => {
+    // Display win/lose message on client side
+    displayEndGameMessage(playerName === currentActivePlayerName); // true if this client is the winner
+  });
+
+  // Listen for timer updates from the server
+  socket.on("timerUpdate", (data) => {
+    if (remainingTime == 0) {
+      rookStartPosition = null;
+    }
+    // Update the remaining time on both clients
+    remainingTime = data.remainingTime;
+    activePlayer = data.activePlayer;
+    currentActivePlayerName = data.playerName;
+  });
 }
 
 function handleKeyDown(event) {
   const cursors = this.input.keyboard.createCursorKeys();
   const step = 41; // The size of each grid cell
 
-  if (cursors.left.isDown) {
-    // Move rook to the left
-    moveRook(-step, 0);
-  } else if (cursors.right.isDown) {
-    // Move rook to the right
-    moveRook(step, 0);
-  } else if (cursors.up.isDown) {
-    // Move rook up
-    moveRook(0, -step);
-  } else if (cursors.down.isDown) {
-    // Move rook down
-    moveRook(0, step);
+  // Check if the current player is active
+  if (playerName === currentActivePlayerName) {
+    if (cursors.left.isDown) {
+      // Move rook to the left
+      moveRook(-step, 0);
+    } else if (cursors.right.isDown) {
+      // Move rook to the right within the same row
+      moveRook(step, 0);
+    } else if (cursors.up.isDown) {
+      // Move rook up within the same column
+      moveRook(0, -step);
+    } else if (cursors.down.isDown) {
+      // Move rook down
+      moveRook(0, step);
+    }
   }
 }
 
 function moveRook(deltaX, deltaY) {
+  // Ensure the starting position is recorded at the beginning of the turn
+  if (!rookStartPosition) {
+    rookStartPosition = { x: rook.x, y: rook.y }; // Initialize at the start of a turn
+  }
+
   // Calculate new position
   const newX = rook.x + deltaX;
   const newY = rook.y + deltaY;
@@ -125,40 +156,65 @@ function moveRook(deltaX, deltaY) {
   const maxY = board.y + board.displayHeight / 2;
 
   // Check if new position is within the bounds of the board
-  if (newX >= minX && newX <= maxX && newY >= minY && newY <= maxY) {
-    // Update rook's position
-    rook.x = newX;
-    rook.y = newY;
+  if (
+    newX >= minX &&
+    newX <= maxX &&
+    newY >= minY &&
+    newY <= maxY &&
+    newX <= rookStartPosition.x &&
+    newY >= rookStartPosition.y
+  ) {
+    // Restrict leftward movement on the row from starting position
+    if (
+      deltaY === 0 &&
+      newX <= rookStartPosition.x &&
+      newY === rookStartPosition.y
+    ) {
+      rook.x = newX;
+    }
+    // Restrict downward movement on the column from starting position
+    if (
+      deltaX === 0 &&
+      newY >= rookStartPosition.y &&
+      newX === rookStartPosition.x
+    ) {
+      rook.y = newY;
+    }
+
+    console.log(newX, newY);
+    if (newX === 47 && newY === 474) {
+      // Add winner logic here
+      handleWin();
+    }
 
     // Emit the new rook position to the server
-    socket.emit("rookPosition", { x: newX, y: newY });
+    socket.emit("rookPosition", { x: rook.x, y: rook.y });
   }
 }
 
-// Function to switch active player and highlight the corresponding circle
-function switchActivePlayer() {
-  const maxBorderWidth = 4; // Width of the border
-  const borderColor = 0x00ff00; // Green color
-  const remainingTime = timerEvent.getProgress();
+function handleWin() {
+  console.log("handle win called");
+
+  // Emit win/lose event to all players
+  socket.emit("gameEnd", { winner: playerName });
+}
+
+function displayEndGameMessage(isWinner) {
+  rook.setScale = 100 / 150;
+  rook.depth = destination.depth + 1;
+
+  const message = isWinner ? "You win" : "You lose";
+  // Code to display the message on the game canvas or HTML
+  const messageElement = document.getElementById("gameMessage");
+  messageElement.textContent = message;
+  messageElement.style.display = "block";
 
   // Clear previous border from both circles
+  remainingTime = 0;
   player1Circle.removeBorder();
   player2Circle.removeBorder();
-
-  let activePlayerName;
-  if (activePlayer === 1) {
-    const borderWidth = maxBorderWidth * remainingTime;
-    player1Circle.addBorder(borderWidth, borderColor);
-    activePlayer = 2; // Switch to player 2
-    activePlayerName = "Abin";
-  } else {
-    const borderWidth = maxBorderWidth * remainingTime;
-    player2Circle.addBorder(borderWidth, borderColor);
-    activePlayer = 1; // Switch to player 1
-    activePlayerName = "Bhanu";
-  }
-
-  console.log(`Active player: ${activePlayerName}`);
+  player1Circle.visible = false;
+  player2Circle.visible = false;
 }
 
 // Function to add a border around the circle sprite
@@ -184,21 +240,29 @@ Phaser.GameObjects.Image.prototype.removeBorder = function () {
 };
 
 function update() {
-  // Calculate remaining time
-  const remainingTime = timerEvent.getProgress();
-  const maxAngle = 360; // Full circle
-  const borderColor = 0x00ff00; // Green color
+  if (remainingTime != undefined) {
+    const maxAngle = 360; // Full circle
+    const borderColor = 0x00ff00; // Green color
 
-  // Clear previous border from both circles
-  player1Circle.removeBorder();
-  player2Circle.removeBorder();
+    // Clear previous border from both circles
+    player1Circle.removeBorder();
 
-  // Calculate angle of the border based on remaining time
-  const angle = maxAngle * (1 - remainingTime);
+    player2Circle.removeBorder();
 
-  if (activePlayer === 1) {
-    player1Circle.addBorder(angle, borderColor);
-  } else {
-    player2Circle.addBorder(angle, borderColor);
+    // Calculate angle based on remaining time
+    const angle = (maxAngle * remainingTime) / TURN_DURATION;
+
+    if (activePlayer === 1) {
+      player1Circle.addBorder(angle, borderColor);
+    } else {
+      player2Circle.addBorder(angle, borderColor);
+    }
   }
+}
+
+// Function to format the remaining time as minutes and seconds
+function formatTime(milliseconds) {
+  const minutes = Math.floor(milliseconds / 60000);
+  const seconds = Math.floor((milliseconds % 60000) / 1000);
+  return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
 }
